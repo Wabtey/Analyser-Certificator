@@ -187,44 +187,11 @@ definition "ok14= (Seq (Read ''x'') (Seq (Read ''y'') (If (Eq (Sum (Variable ''x
 (* Si san accepte un programme alors son évaluation, quelles que soient les entrées utilisateur (inchan)
    ne provoquera pas d'exec(0) *)
 
-(*
-  -- 3.1 --
-   p1, p2, p3 are dangerous (call a exec(0)) p4 is safe.
-*)
-
-(* -- 3.2 -- *)
-(*
-  We dont have to test different value
-  for inchan in p1, p2, p3; They don't call any read()
-*)
-
-value "evalS p1 ([],[0, 1],[])"
-value "evalS p2 ([],[10],[])"
-value "evalS p3 ([],[50],[])"
-value "evalS p4 ([],[0],[])"
-value "evalS p4 ([],[-1],[])"
-
-(* -- 3.3 -- *)
-(* p1, p2, p3 are still considered as bad, there is no exec in p4 so it's safe *)
-
-(* -- 3.4 -- *)
-fun BAD::"(symTable * inchan * outchan) \<Rightarrow> bool"
-  where
-  "BAD (_,_,[]) = False" |
-  "BAD (t,inchan, (out # outchan) ) = (
-    if out = X 0 then True
-    else BAD (t,inchan,outchan)
-  )"
-
-lemma correction: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, outchan)"
+lemma correction: ""
   nitpick[timeout=120]
   quickcheck[tester=narrowing,size=5,timeout=120]
-  apply (induct outchan)
-  apply simp
-  apply (simp add: member_rec(2))
-  by (simp add: member_rec(1))
+  sorry
 
-(* Static Analyzer *)
 
 (* ----- Restriction de l'export Scala (Isabelle 2018) -------*)
 (* ! ! !  NE PAS MODIFIER ! ! ! *)
