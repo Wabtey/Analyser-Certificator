@@ -210,19 +210,13 @@ value "evalS p4 ([],[-1],[])"
 (* -- 3.4 -- *)
 fun BAD::"(symTable * inchan * outchan) \<Rightarrow> bool"
   where
-  "BAD (_,_,[]) = False" |
-  "BAD (t,inchan, (out # outchan) ) = (
-    if out = X 0 then True
-    else BAD (t,inchan,outchan)
-  )"
+  "BAD (t,inchan, outchan) = List.member outchan (X 0)"
 
 lemma correction: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, outchan)"
   nitpick[timeout=120]
   quickcheck[tester=narrowing,size=5,timeout=120]
-  apply (induct outchan)
-  apply simp
-  apply (simp add: member_rec(2))
-  by (simp add: member_rec(1))
+  apply auto
+  done
 
 (* Static Analyzer *)
 
