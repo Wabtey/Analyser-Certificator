@@ -1,0 +1,13 @@
+{
+  read(x)
+  y:=x+2
+  if (x = 0-1) then {
+    x:=x+2
+    y:=y-x
+  }
+  else {
+    x:=x-2
+    y:=y-x
+  }
+  exec(y)
+}

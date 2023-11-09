@@ -1,0 +1,6 @@
+{
+  x:=1
+  read(z)
+  if (z=0) then exec(y)
+  else exec(z)
+}

@@ -1,0 +1,5 @@
+{
+  read(x)
+  if (x=0) then skip else y:=1
+  exec(y+1)
+}

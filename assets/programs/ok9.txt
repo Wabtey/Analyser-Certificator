@@ -1,0 +1,5 @@
+{
+ read(x)
+ if (x=1) then exec(x)
+ else exec(2)
+ }

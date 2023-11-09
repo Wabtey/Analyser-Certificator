@@ -1,0 +1,5 @@
+{
+	read(x)
+	read(y)
+	if(x+y=0) then exec(1) else exec(x+y)
+}

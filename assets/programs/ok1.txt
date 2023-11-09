@@ -1,0 +1,7 @@
+{
+	x:=1
+	print(x+x)
+	exec(10)
+	read(y)
+	if (y=0) then exec(1) else exec(2)
+}

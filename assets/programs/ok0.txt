@@ -1,0 +1,19 @@
+{
+	x:=1
+	read(y)
+	if (y=0) then {
+		print(y+x)
+		print(x)
+	}
+	else print(y)
+	x:=1
+	print(x)
+	x:=2
+	print(x)
+	x:=3 
+	print(x)
+	read(y)
+	if (y=0) then z:=x+x
+	else z:=x-y
+	print(z)
+}
