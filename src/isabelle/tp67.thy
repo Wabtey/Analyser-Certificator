@@ -212,13 +212,28 @@ fun BAD::"(symTable * inchan * outchan) \<Rightarrow> bool"
   where
   "BAD (t,inchan, outchan) = List.member outchan (X 0)"
 
-lemma correction: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, outchan)"
+lemma badIsBad: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, outchan)"
   nitpick[timeout=120]
   quickcheck[tester=narrowing,size=5,timeout=120]
   apply auto
   done
 
+(* -- 4.1 --  *)
+
 (* Static Analyzer *)
+fun san::"statement \<Rightarrow> bool"
+  where
+"san (Seq s1 s2) = (san s1 \<and> san s2)" |
+"san (If _ s1 s2) = (san s1 \<and> san s2)" |
+"san (Exec _) = False" |
+"san _ = True"
+
+lemma correction: "san s \<longrightarrow> \<not>BAD (evalS s (t,i,[]))"
+  nitpick
+  quickcheck
+  apply auto
+  sledgehammer
+  sorry
 
 (* ----- Restriction de l'export Scala (Isabelle 2018) -------*)
 (* ! ! !  NE PAS MODIFIER ! ! ! *)
