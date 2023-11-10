@@ -187,11 +187,53 @@ definition "ok14= (Seq (Read ''x'') (Seq (Read ''y'') (If (Eq (Sum (Variable ''x
 (* Si san accepte un programme alors son évaluation, quelles que soient les entrées utilisateur (inchan)
    ne provoquera pas d'exec(0) *)
 
-lemma correction: ""
+(*
+  -- 3.1 --
+   p1, p2, p3 are dangerous (call a exec(0)) p4 is safe.
+*)
+
+(* -- 3.2 -- *)
+(*
+  We dont have to test different value
+  for inchan in p1, p2, p3; They don't call any read()
+*)
+
+value "evalS p1 ([],[0, 1],[])"
+value "evalS p2 ([],[10],[])"
+value "evalS p3 ([],[50],[])"
+value "evalS p4 ([],[0],[])"
+value "evalS p4 ([],[-1],[])"
+
+(* -- 3.3 -- *)
+(* p1, p2, p3 are still considered as bad, there is no exec in p4 so it's safe *)
+
+(* -- 3.4 -- *)
+fun BAD::"(symTable * inchan * outchan) \<Rightarrow> bool"
+  where
+  "BAD (t,inchan, outchan) = List.member outchan (X 0)"
+
+lemma badIsBad: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, outchan)"
   nitpick[timeout=120]
   quickcheck[tester=narrowing,size=5,timeout=120]
-  sorry
+  apply auto
+  done
 
+(* -- 4.1 --  *)
+
+(* Static Analyzer *)
+fun san::"statement \<Rightarrow> bool"
+  where
+"san (Seq s1 s2) = (san s1 \<and> san s2)" |
+"san (If _ s1 s2) = (san s1 \<and> san s2)" |
+"san (Exec _) = False" |
+"san _ = True"
+
+lemma correction: "san s \<longrightarrow> \<not>BAD (evalS s (t,i,[]))"
+  nitpick
+  quickcheck
+  apply auto
+  sledgehammer
+  sorry
 
 (* ----- Restriction de l'export Scala (Isabelle 2018) -------*)
 (* ! ! !  NE PAS MODIFIER ! ! ! *)

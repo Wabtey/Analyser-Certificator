@@ -218,17 +218,33 @@ lemma badIsBad: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, out
   apply auto
   done
 
+(* ---------- Static Analyzer ---------- *)
+
 (* -- 4.1 --  *)
-
-(* Static Analyzer *)
-fun san::"statement \<Rightarrow> bool"
+fun sanShotgun::"statement \<Rightarrow> bool"
   where
-"san (Seq s1 s2) = (san s1 \<and> san s2)" |
-"san (If _ s1 s2) = (san s1 \<and> san s2)" |
-"san (Exec _) = False" |
-"san _ = True"
+"sanShotgun (Seq s1 s2) = (sanShotgun s1 \<and> sanShotgun s2)" |
+"sanShotgun (If _ s1 s2) = (sanShotgun s1 \<and> sanShotgun s2)" |
+"sanShotgun (Exec _) = False" |
+"sanShotgun _ = True"
 
-lemma correction: "san s \<longrightarrow> \<not>BAD (evalS s (t,i,[]))"
+lemma correction: "sanShotgun s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
+  nitpick
+  quickcheck
+  apply auto
+  sledgehammer
+  sorry
+
+(* --- 4.2 --- *)
+fun sanConstant::"statement \<Rightarrow> bool"
+  where
+"sanConstant (Seq s1 s2) = (sanConstant s1 \<and> sanConstant s2)" |
+"sanConstant (If _ s1 s2) = (sanConstant s1 \<and> sanConstant s2)" |
+"sanConstant (Exec (Constant c)) = (\<not>(c=0))" |
+"sanConstant (Exec _) = False" |
+"sanConstant _ = True"
+
+lemma correction: "sanConstant s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
   nitpick
   quickcheck
   apply auto
