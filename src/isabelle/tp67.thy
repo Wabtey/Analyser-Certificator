@@ -481,7 +481,8 @@ import AutomaticConversion._
 
 (* Directive pour l'exportation de l'analyseur *)
 
-export_code san in Scala (case_insensitive)
+(* TODO: URGENT - change to san to export the finest one *)
+export_code sanConstant in Scala (case_insensitive)
 
 (* file "~/workspace/TP67/src/tp67/san.scala"   (* à adapter en fonction du chemin de votre projet TP67 *)
 *)

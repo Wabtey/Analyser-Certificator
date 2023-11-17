@@ -4,6 +4,6 @@ import utilities.Datatype._
 
 object Analyzer {
   def safe(p: statement): Boolean = {
-    false
+    tp67.sanconstant(p)
   }
 }
