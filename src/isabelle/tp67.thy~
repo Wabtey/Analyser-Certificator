@@ -218,17 +218,111 @@ lemma badIsBad: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, out
   apply auto
   done
 
+(* ---------- Static Analyzer ---------- *)
+
 (* -- 4.1 --  *)
-
-(* Static Analyzer *)
-fun san::"statement \<Rightarrow> bool"
+fun sanShotgun::"statement \<Rightarrow> bool"
   where
-"san (Seq s1 s2) = (san s1 \<and> san s2)" |
-"san (If _ s1 s2) = (san s1 \<and> san s2)" |
-"san (Exec _) = False" |
-"san _ = True"
+"sanShotgun (Seq s1 s2) = (sanShotgun s1 \<and> sanShotgun s2)" |
+"sanShotgun (If _ s1 s2) = (sanShotgun s1 \<and> sanShotgun s2)" |
+"sanShotgun (Exec _) = False" |
+"sanShotgun _ = True"
 
-lemma correction: "san s \<longrightarrow> \<not>BAD (evalS s (t,i,[]))"
+lemma correctionSanShotgun: "sanShotgun s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
+  nitpick
+  quickcheck
+  apply auto
+  sorry
+
+(* --- 4.2 --- *)
+fun sanConstant::"statement \<Rightarrow> bool"
+  where
+"sanConstant (Seq s1 s2) = (sanConstant s1 \<and> sanConstant s2)" |
+"sanConstant (If _ s1 s2) = (sanConstant s1 \<and> sanConstant s2)" |
+"sanConstant (Exec (Constant c)) = (\<not>(c=0))" |
+"sanConstant (Exec _) = False" |
+"sanConstant _ = True"
+
+lemma correctionSanConstant: "sanConstant s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
+  nitpick
+  quickcheck
+  apply auto
+  sledgehammer
+  sorry
+
+(* --- 4.3 --- *)
+type_synonym staticSymTable= "(string * (int option) list) list"
+(* Un exemple de table de symbole *)
+definition "(statST1::staticSymTable)= [(''x'',[Some 5, Some 0]),(''y'',[None, Some 2, Some 17])]"
+
+fun staticAssoc:: "'a \<Rightarrow> ('a * ('b option) list) list \<Rightarrow> ('b option) list"
+where
+"staticAssoc _ [] = []" |
+"staticAssoc x1 ((x,ys)#xs)= (if x=x1 then ys else (staticAssoc x1 xs))"
+
+(* Exemples de recherche dans une table de symboles *)
+
+value "staticAssoc ''x'' statST1"     (* quand la variable est dans la table statST1 *)
+value "staticAssoc ''z'' statST1"     (* quand la variable n'est pas dans la table statST1 *)
+
+(*
+  placeholder x ys adds x to each ys' element
+  DOC: rename
+ *)
+fun placeholder::"int \<Rightarrow> int list \<Rightarrow> int list"
+  where
+"placeholder _ [] = []" |
+"placeholder x (y # ys) = ((x + y) # (placeholder x ys))"
+
+value "placeholder 0 [0,1,-1]"
+value "placeholder 1 [0,1,-1]"
+
+(*
+  create a bigger list 
+  DOC: mapAddition
+*)
+fun mapAddition::"int list \<Rightarrow> int list \<Rightarrow> int list"
+  where
+"mapAddition [] res = res" |
+"mapAddition (x # xs) ys = mapAddition xs (placeholder x ys)"
+
+(* TODO: mapSubtraction *)
+fun mapSubtraction::"int list \<Rightarrow> int list \<Rightarrow> int list"
+  where
+"mapSubtraction xs ys = mapAddition xs ys"
+
+(* Evaluation des expressions par rapport a une table de symboles *)
+fun staticEvalE:: "expression \<Rightarrow> staticSymTable \<Rightarrow> int list"
+where
+"staticEvalE (Constant c) _ = [c]" |
+"staticEvalE (Sum e1 e2) e= (mapAddition (staticEvalE e1 e) (staticEvalE e2 e))" |
+"staticEvalE (Sub e1 e2) e= (mapSubtraction (staticEvalE e1 e) (staticEvalE e2 e))" |
+"staticEvalE (Variable s) e= (
+  let ys = (staticAssoc s e) in (
+    if (List.member ys None) then [-1]
+    else (
+      [0,0]
+    ) 
+))"
+(* staticEvalE (Variable s) e = "(case (staticAssoc s e) of None \<Rightarrow> -1 | Some(y) \<Rightarrow> y)" *)
+
+fun san::"statement \<Rightarrow> staticSymTable \<Rightarrow> (staticSymTable * bool)"
+  where
+"san (Seq s1 s2) symt = (
+  let (s1ST, s1IsOK) = san s1 symt in
+    let (s2ST_, s2IsOK) = san s2 s1ST in
+      (s2ST, s1IsOK \<and> s2IsOK)
+)" |
+(* draw all possible staticSymTable for each arm and return the concat of the two *)
+"san (If c s1 s2) symt = (san s1 symt \<and> san s2 symt)" |
+"san (Aff s e) symt =  (s,(evalE e t))#t)" |
+"evalS (Read _) (t,[],outch)= (t,[],outch)" |
+"evalS (Read s) (t,(x#xs),outch)= (((s,x)#t),xs,outch)" |
+"evalS (Print e) (t,inch,outch)= (t,inch,((P (evalE e t))#outch))" |
+"san (Exec e) symt = (\<not>(staticEvalE e symt = 0))" |
+"san _ _ = True"
+
+lemma correctionSan: "san s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
   nitpick
   quickcheck
   apply auto
