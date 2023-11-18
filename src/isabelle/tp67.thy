@@ -181,16 +181,10 @@ definition "ok13= (Seq (Aff ''z'' (Constant 4)) (Seq (Aff ''x'' (Constant 1)) (S
 definition "ok14= (Seq (Read ''x'') (Seq (Read ''y'') (If (Eq (Sum (Variable ''x'') (Variable ''y'')) (Constant 0)) (Exec (Constant 1)) (Exec (Sum (Variable ''x'') (Variable ''y''))))))"
 
 
-(* Le TP commence ici! *)
-(* TODO: BAD, san0, lemme de correction *)
+(* v--------------------- Le TP commence ici! ---------------------v *)
 
-(* Si san accepte un programme alors son évaluation, quelles que soient les entrées utilisateur (inchan)
-   ne provoquera pas d'exec(0) *)
-
-(*
-  -- 3.1 --
-   p1, p2, p3 are dangerous (call a exec(0)) p4 is safe.
-*)
+(* -- 3.1 -- *)
+(* p1, p2, p3 are dangerous (call a exec(0)) p4 is safe. *)
 
 (* -- 3.2 -- *)
 (*
@@ -220,6 +214,14 @@ lemma badIsBad: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, out
 
 (* ---------- Static Analyzer ---------- *)
 
+(*
+  Si san accepte un programme alors son évaluation,
+  quelles que soient les entrées utilisateur (inchan)
+  ne provoquera pas d'exec(0).
+*)
+(* staticEvalE (Variable s) e = "(case (staticAssoc s e) of None \<Rightarrow> -1 | Some(y) \<Rightarrow> y)" *)
+
+
 (* -- 4.1 --  *)
 fun sanShotgun::"statement \<Rightarrow> bool"
   where
@@ -228,11 +230,10 @@ fun sanShotgun::"statement \<Rightarrow> bool"
 "sanShotgun (Exec _) = False" |
 "sanShotgun _ = True"
 
-lemma correction: "sanShotgun s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
+lemma correctionSanShotgun: "sanShotgun s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
   nitpick
   quickcheck
   apply auto
-  sledgehammer
   sorry
 
 (* --- 4.2 --- *)
@@ -244,7 +245,292 @@ fun sanConstant::"statement \<Rightarrow> bool"
 "sanConstant (Exec _) = False" |
 "sanConstant _ = True"
 
-lemma correction: "sanConstant s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
+lemma correctionSanConstant: "sanConstant s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
+  nitpick
+  quickcheck
+  apply auto
+  sledgehammer
+  sorry
+
+(* --- 4.3 --- *)
+
+(* ----- Just differenciate the Read and noneRead path ----- *)
+
+(* staticEvalE (Variable s) e = "(case (staticAssoc s e) of None \<Rightarrow> -1 | Some(y) \<Rightarrow> y)" *)
+
+(* TODO *)
+
+(* ----- Visualize all possibles outcome ----- *)
+(*
+  For each variable, keep track of their possible values
+  for all if branches.
+*)
+
+fun remove::"'a \<Rightarrow> 'a list \<Rightarrow> 'a list" where
+"remove _ [] = []" |
+"remove e (x#xs) = (
+  if e=x then remove e xs
+  else x # remove e xs
+)"
+
+fun howMany::"'a \<Rightarrow> 'a list \<Rightarrow> int"
+  where
+"howMany _ [] = 0" |
+"howMany e (x # xs) = (
+  if e = x then 1 + howMany e xs
+  else howMany e xs
+)"
+
+fun removeDuplicate::"'a list \<Rightarrow> 'a list"
+  where
+"removeDuplicate [] = []" |
+"removeDuplicate (x # xs) = (
+  if List.member xs x then removeDuplicate xs
+  else x # (removeDuplicate xs)
+)"
+
+lemma allThere: "
+  List.member xs x \<longleftrightarrow> List.member (removeDuplicate xs) x
+"
+  apply (induct xs)
+  apply simp
+  using member_rec(1) by force
+
+lemma noMoreDuplicate: "
+  List.member xs x \<longleftrightarrow> howMany x (removeDuplicate xs) = 1
+"
+  apply (induct xs)
+  apply simp
+  apply (simp add: member_rec(2))
+  sorry
+
+(*
+  unwrap all option in the list.
+  WARNING: if there is a None it will be not unwraped/be simply ignored.
+  Only the none-None will be unwrap.
+
+  currently unused. :)
+*)
+fun unwrapOptionList::"('a option) list \<Rightarrow> 'a list" where
+  "unwrapOptionList [] = []" |
+  "unwrapOptionList (x#xs) = (
+    case x of
+      Some value \<Rightarrow> value # (unwrapOptionList xs) |
+      None \<Rightarrow> unwrapOptionList xs
+  )"
+
+(*
+  Create a list of (max) xs lenght times ys length - duplicate.
+  mapAllAddition xs ys \<Rightarrow> create a new list with all possible combinations by addition.
+*)
+fun mapAllAddition::"int list \<Rightarrow> int list \<Rightarrow> int list"
+  where
+"mapAllAddition [] res = []" |
+"mapAllAddition (x # xs) ys = List.append (map (\<lambda>y::int. x+y)ys) (mapAllAddition xs ys)"
+
+value "map (\<lambda> y::nat.1+y)[1,2]" 
+
+abbreviation mapAllAdditionSet :: "int list \<Rightarrow> int list \<Rightarrow> int list" where
+  "mapAllAdditionSet xs ys \<equiv> removeDuplicate (mapAllAddition xs ys)"
+
+value "mapAllAdditionSet [0] [0,1,2,3]"
+value "mapAllAdditionSet [1] [0,1,2,3]"
+value "mapAllAdditionSet [0,1,2,3] [1]"
+value "mapAllAdditionSet [0,1] [0,1,2,3]"
+value "mapAllAdditionSet [10] [0,1,2,3]"
+value "mapAllAdditionSet [0,1,2,3] [0,1,2,3]"
+value "mapAllAdditionSet [1,0,11] [2,1,5]"
+value "mapAllAdditionSet [] [2,1,1,5]"
+
+(* TODO: Lemmas on mapAllAdditionSet lmao... *)
+
+
+(*
+  Create a list of (max) xs lenght times ys length - duplicate.
+  mapAllSubtraction xs ys \<Rightarrow>
+    create a new list with
+    all possible combinations of xs - all element of ys.
+*)
+fun mapAllSubtraction::"int list \<Rightarrow> int list \<Rightarrow> int list"
+  where
+"mapAllSubtraction [] res = []" |
+"mapAllSubtraction (x # xs) ys = List.append (map (\<lambda>y::int. x-y)ys) (mapAllSubtraction xs ys)"
+
+value "map (\<lambda> y::nat. 5-y)[1,2]" 
+
+abbreviation mapAllSubtractionSet :: "int list \<Rightarrow> int list \<Rightarrow> int list" where
+  "mapAllSubtractionSet xs ys \<equiv> removeDuplicate (mapAllSubtraction xs ys)"
+
+value "mapAllSubtractionSet [0] [0,1,2,3]"
+value "mapAllSubtractionSet [1] [0,1,2,3]"
+value "mapAllSubtractionSet [0,1,2,3] [1]"
+value "mapAllSubtractionSet [0,1] [0,1,2,3]"
+value "mapAllSubtractionSet [10] [0,1,2,3]"
+value "mapAllSubtractionSet [0,1,2,3] [0,1,2,3]"
+value "mapAllSubtractionSet [1,0,11] [2,1,5]"
+value "mapAllSubtractionSet [] [2,1,1,5]"
+
+type_synonym staticSymTable= "(string * (int list) option) list"
+(* Un exemple de table de symbole *)
+definition "(statST1::staticSymTable)=
+  [
+    (''x'',Some [5, 0]),
+    (''y'',None)
+  ]"
+definition "(statST2::staticSymTable)=
+  [
+    (''x'',Some [1]),
+    (''z'',Some [7])
+  ]"
+
+fun removeStatST::"string \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable" where
+  "removeStatST _ [] = []" |
+  "removeStatST e ((var, values)#xs) = (
+    if e = var then removeStatST e xs
+    else (var, values)#(removeStatST e xs)
+  )"
+
+(* a memberStatST which also returns the actual values (which is an option). *)
+fun getStatST::"string \<Rightarrow> staticSymTable \<Rightarrow> ((int list) option) option" where
+  "getStatST _ [] = None" |
+  "getStatST e ((var, values)#xs) = (
+    if e = var then Some values
+    else getStatST e xs
+  )"
+
+(*
+  Search the variable e in the given staticSymStable.
+  staticAssoc varToFind staticSymTable \<Rightarrow> possible values of the varToFind 
+*)
+fun staticAssoc:: "'a \<Rightarrow> ('a * ('b list) option) list \<Rightarrow> ('b list) option"
+where
+"staticAssoc _ [] = None" |
+"staticAssoc e ((var, potentialValues)#xs)= (
+  if e=var then potentialValues else (staticAssoc e xs)
+)"
+
+(* Exemples de recherche dans une table de symboles statique *)
+value "staticAssoc ''x'' statST1"     (* quand la variable est dans la table statST1 *)
+value "staticAssoc ''z'' statST1"     (* quand la variable n'est pas dans la table statST1 *)
+
+(*
+  Merge two staticSymTable together.
+  If a var is present in both, it is locally merged with the potentialValues of both.
+  Else if a variable is present in only one of them,
+  it mean that there exist an execution path where this very variable is not initialised so turn it to None.
+  NOTE: we don't have to remove the var's "ghost footprint" from the rest of the staticSymTable,
+        as the staticAssoc will always returns the first one to matches (dc about duplicates).
+*)
+fun mergeStatST::"staticSymTable \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable"
+  where
+(*
+  as we removed all previously managed variables,
+  the remainding are only those not existing in the FIRST branch of the if statement.
+  So we need to turn all their possible values to NONE.
+*)
+"mergeStatST [] [] = []" |
+(* Once the merge is done, nullify any other varibles *)
+"mergeStatST [] ((var, potentialValues)# ys) = (
+  (var, None) # mergeStatST [] ys
+)" |
+"mergeStatST ((var, potentialValuesInX) # xs) ys = (
+  let potentialValuesInY = staticAssoc var ys in
+    (
+      var,
+      case (potentialValuesInX, potentialValuesInY) of
+        (Some valuesInX, Some valuesInY) \<Rightarrow> Some (List.append valuesInX valuesInY) |
+        _ \<Rightarrow> None
+    )
+    # mergeStatST xs (removeStatST var ys)
+)"
+
+value "mergeStatST statST1 statST2"
+
+(*
+  Evaluation des expressions
+  par rapport a une table de symboles statique.
+
+  If the result is an empty list, then you can't tell its evaluation
+  (means that a Read is on the way, without being overwritten).
+  Else it returns the possible evaluations of the given expression.
+*)
+fun staticEvalE:: "expression \<Rightarrow> staticSymTable \<Rightarrow> int list"
+where
+"staticEvalE (Constant c) _ = [c]" |
+
+"staticEvalE (Sum e1 e2) e= (mapAllAdditionSet (staticEvalE e1 e) (staticEvalE e2 e))" |
+"staticEvalE (Sub e1 e2) e= (mapAllSubtractionSet (staticEvalE e1 e) (staticEvalE e2 e))" |
+"staticEvalE (Variable s) e= (
+  let ys = (staticAssoc s e) in (
+    case ys of
+      None \<Rightarrow> [] |
+      Some values \<Rightarrow> values
+))"
+
+(*
+  This Static Analyzer uses a brand new static symbols table.
+  This staticSymTable associates
+    for each variable name
+    - a None if we don't know the value (a Read of that variable could be in the lastest trace).
+    - a Some (int list) to keep track of all possible values of this very variable.
+  NOTE that we could have manage to simply use a staticSymTable associating
+  variables' name a (int list), with an empty list meaning the danger of Read.
+  BUT in order to keep the whole mess legible and to avoid abstracting the notion of danger,
+  i.e. in the intermediate functions on structures
+    (mapAllAdditionSet and mapAllSubtractionSet were ok using [] as the danger,
+    but a specific append should have been created to avoid "losing" the danger).
+
+  REMEMBER that Aff or Read a variable just overwrite the previous potential values.
+*)
+fun san::"statement \<Rightarrow> staticSymTable \<Rightarrow> (staticSymTable * bool)"
+  where
+"san (Seq s1 s2) symt = (
+  let (s1ST, s1IsOK) = san s1 symt in
+    let (s2ST, s2IsOK) = san s2 s1ST in
+      (s2ST, s1IsOK \<and> s2IsOK)
+)" |
+(* draw all possible staticSymTable for each arm and return the two merged. *)
+"san (If c s1 s2) symt = (
+  let (s1ST, s1IsOK) = san s1 symt in
+    let (s2ST, s2IsOK) = san s2 symt in
+      (mergeStatST s1ST s2ST, s1IsOK \<and> s2IsOK)
+)" |
+(* Put (aka replace) the potential values of var in the staticSymTable *)
+(* however you can still code `Aff x (x+1)` as the staticEvalE is done with the current symt *)
+(* NOTE: 
+  We don't have to remove reallocated var from the symt.
+  Simply add it to the top.
+  As the staticAssoc returns always the first which matches.
+  But we want to have a clean staticSymTable with no duplicate (which is optional / useless)
+  to stay classy after such battles. (but actually not opti...) *)
+"san (Aff var exp) symt = (
+  case staticEvalE exp symt of
+    [] \<Rightarrow> (
+      case getStatST var symt of
+        None \<Rightarrow> (((var, None)#symt), True) |
+        Some _ \<Rightarrow> (((var, None)# (removeStatST var symt)), True)
+          )|
+    integerValues \<Rightarrow> (
+      case getStatST var symt of
+        None \<Rightarrow> (((var, Some integerValues)#symt), True) |
+        Some _ \<Rightarrow> (((var, Some integerValues)# (removeStatST var symt)), True)
+                     )
+)" |
+"san (Read var) symt = (
+   case getStatST var symt of
+    None \<Rightarrow> (((var, None)#symt), True) |
+    Some _ \<Rightarrow> (((var, None)# (removeStatST var symt)), True)
+)" |
+"san (Exec e) symt = 
+  (symt, let values = staticEvalE e symt in
+    \<not>List.member values 0 \<and> values \<noteq> [])
+" |
+(* Skip and Print belong here. *)
+"san _ symt = (symt, True)"
+
+(* TODO: Lemma *)
+lemma correctionSan: "
+  let (sST, isOK) = san s [] in isOK \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
   nitpick
   quickcheck
   apply auto

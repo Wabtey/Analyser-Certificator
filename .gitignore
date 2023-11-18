@@ -5,9 +5,10 @@
 hs_err_pid*
 
 # Metals
-.bloop
+**/.bloop
 .metals/**
 project/**
+project/.bloop/**
 target
 
 # Editor
