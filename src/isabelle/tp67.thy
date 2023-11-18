@@ -416,12 +416,23 @@ value "staticAssoc ''z'' statST1"     (* quand la variable n'est pas dans la tab
 (*
   Merge two staticSymTable together.
   If a var is present in both, it is locally merged with the potentialValues of both.
+  Else if a variable is present in only one of them,
+  it mean that there exist an execution path where this very variable is not initialised so turn it to None.
   NOTE: we don't have to remove the var's "ghost footprint" from the rest of the staticSymTable,
         as the staticAssoc will always returns the first one to matches (dc about duplicates).
 *)
 fun mergeStatST::"staticSymTable \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable"
   where
-"mergeStatST [] ys = ys" |
+(*
+  as we removed all previously managed variables,
+  the remainding are only those not existing in the FIRST branch of the if statement.
+  So we need to turn all their possible values to NONE.
+*)
+"mergeStatST [] [] = []" |
+(* Once the merge is done, nullify any other varibles *)
+"mergeStatST [] ((var, potentialValues)# ys) = (
+  (var, None) # mergeStatST [] ys
+)" |
 "mergeStatST ((var, potentialValuesInX) # xs) ys = (
   let potentialValuesInY = staticAssoc var ys in
     (

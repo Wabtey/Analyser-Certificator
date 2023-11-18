@@ -332,7 +332,9 @@ object tp67 {
     }
 
   /** Merge two staticSymTable together. If a var is present in both, it is
-    * locally merged with the potentialValues of both.
+    * locally merged with the potentialValues of both. Else if a variable is
+    * present in only one of them, it mean that there exist an execution path
+    * where this very variable is not initialised so turn it to None.
     *
     * NOTE: we don't have to remove the var's "ghost footprint" from the rest of
     * the staticSymTable, as the staticAssoc will always returns the first one
@@ -347,7 +349,13 @@ object tp67 {
       ys: List[(List[String.char], option[List[Int.int]])]
   ): List[(List[String.char], option[List[Int.int]])] =
     (x0, ys) match {
-      case (Nil, ys) => ys
+      // as we removed all previously managed variables,
+      // the remainding are only those not existing in the FIRST branch of the if statement.
+      // So we need to turn all their possible values to NONE.
+      case (Nil, Nil) => Nil
+      // Once the merge is done, nullify any other varibles.
+      case (Nil, (vara, potentialValues) :: ys) =>
+        (vara, None[List[Int.int]]()) :: mergestatst(Nil, ys)
       case ((vara, potentialValuesInX) :: xs, ys) => {
         val potentialValuesInY: option[List[Int.int]] =
           staticassoc[List[String.char], Int.int](vara, ys);
