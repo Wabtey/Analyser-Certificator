@@ -251,39 +251,101 @@ lemma correctionSanConstant: "sanConstant s \<longrightarrow> \<not>BAD (evalS s
   sorry
 
 (* --- 4.3 --- *)
-(*
-  mapAddition xs ys \<Rightarrow> add all element of xs
-    to all element of ys.
-*)
-fun mapAddition::"int list \<Rightarrow> int list \<Rightarrow> int list"
+
+(* ----- Just differenciate the Read and noneRead path ----- *)
+
+(* TODO *)
+
+(* ----- Visualize all possibles outcome ----- *)
+
+fun remove::"'a \<Rightarrow> 'a list \<Rightarrow> 'a list" where
+"remove _ [] = []" |
+"remove e (x#xs) = (
+  if e=x then remove e xs
+  else x # remove e xs
+)"
+
+fun howMany::"'a \<Rightarrow> 'a list \<Rightarrow> int"
   where
-"mapAddition [] res = res" |
-"mapAddition (x # xs) ys = mapAddition xs (map (\<lambda>y::int. x+y)ys)"
+"howMany _ [] = 0" |
+"howMany e (x # xs) = (
+  if e = x then 1 + howMany e xs
+  else howMany e xs
+)"
+
+fun removeDuplicate::"'a list \<Rightarrow> 'a list"
+  where
+"removeDuplicate [] = []" |
+"removeDuplicate (x # xs) = (
+  if List.member xs x then removeDuplicate xs
+  else x # (removeDuplicate xs)
+)"
+
+lemma allThere: "
+  List.member xs x \<longleftrightarrow> List.member (removeDuplicate xs) x
+"
+  apply (induct xs)
+  apply simp
+  using member_rec(1) by force
+
+lemma noMoreDuplicate: "
+  List.member xs x \<longleftrightarrow> howMany x (removeDuplicate xs) = 1
+"
+  apply (induct xs)
+  apply simp
+  apply (simp add: member_rec(2))
+  sorry
+
+(*
+  Create a list of (max) xs lenght times ys length - duplicate.
+  mapAllAddition xs ys \<Rightarrow> create a new list with all possible combinations by addition.
+*)
+fun mapAllAddition::"int list \<Rightarrow> int list \<Rightarrow> int list"
+  where
+"mapAllAddition [] res = []" |
+"mapAllAddition (x # xs) ys = List.append (map (\<lambda>y::int. x+y)ys) (mapAllAddition xs ys)"
 
 value "map (\<lambda> y::nat.1+y)[1,2]" 
 
-value "mapAddition [0] [0,1,2,3]"
-value "mapAddition [1] [0,1,2,3]"
-value "mapAddition [0,1] [0,1,2,3]"
-value "mapAddition [10] [0,1,2,3]"
-value "mapAddition [0,1,2,3] [0,1,2,3]"
+abbreviation mapAllAdditionSet :: "int list \<Rightarrow> int list \<Rightarrow> int list" where
+  "mapAllAdditionSet xs ys \<equiv> removeDuplicate (mapAllAddition xs ys)"
 
-(* 
-  mapSubstraction list1 list2 \<Rightarrow>
-    substract each element of list1 from all of list2
+value "mapAllAdditionSet [0] [0,1,2,3]"
+value "mapAllAdditionSet [1] [0,1,2,3]"
+value "mapAllAdditionSet [0,1,2,3] [1]"
+value "mapAllAdditionSet [0,1] [0,1,2,3]"
+value "mapAllAdditionSet [10] [0,1,2,3]"
+value "mapAllAdditionSet [0,1,2,3] [0,1,2,3]"
+value "mapAllAdditionSet [1,0,11] [2,1,5]"
+value "mapAllAdditionSet [] [2,1,1,5]"
+
+(* TODO: Lemmas on mapAllAdditionSet lmao... *)
+
+
+(*
+  Create a list of (max) xs lenght times ys length - duplicate.
+  mapAllSubtraction xs ys \<Rightarrow>
+    create a new list with
+    all possible combinations of xs - all element of ys.
 *)
-fun mapSubtraction::"int list \<Rightarrow> int list \<Rightarrow> int list"
+fun mapAllSubtraction::"int list \<Rightarrow> int list \<Rightarrow> int list"
   where
-"mapSubtraction [] res = res" |
-"mapSubtraction (x # xs) ys = mapSubtraction xs (map (\<lambda>y::int. y-x)ys)"
+"mapAllSubtraction [] res = []" |
+"mapAllSubtraction (x # xs) ys = List.append (map (\<lambda>y::int. x-y)ys) (mapAllSubtraction xs ys)"
 
-value "map (\<lambda> y::int. y-1)[1,2]"
+value "map (\<lambda> y::nat. 5-y)[1,2]" 
 
-value "mapSubtraction [0] [0,1,2,3]"
-value "mapSubtraction [1] [0,1,2,3]"
-value "mapSubtraction [0,1] [0,1,2,3]"
-value "mapSubtraction [10] [0,1,2,3]"
-value "mapSubtraction [0,1,2,3] [0,1,2,3]"
+abbreviation mapAllSubtractionSet :: "int list \<Rightarrow> int list \<Rightarrow> int list" where
+  "mapAllSubtractionSet xs ys \<equiv> removeDuplicate (mapAllSubtraction xs ys)"
+
+value "mapAllSubtractionSet [0] [0,1,2,3]"
+value "mapAllSubtractionSet [1] [0,1,2,3]"
+value "mapAllSubtractionSet [0,1,2,3] [1]"
+value "mapAllSubtractionSet [0,1] [0,1,2,3]"
+value "mapAllSubtractionSet [10] [0,1,2,3]"
+value "mapAllSubtractionSet [0,1,2,3] [0,1,2,3]"
+value "mapAllSubtractionSet [1,0,11] [2,1,5]"
+value "mapAllSubtractionSet [] [2,1,1,5]"
 
 type_synonym staticSymTable= "(string * (int option) list) list"
 (* Un exemple de table de symbole *)
@@ -292,16 +354,34 @@ definition "(statST1::staticSymTable)=
     (''x'',[Some 5, Some 0]),
     (''y'',[None, Some 2, Some 17])
   ]"
+definition "(statST2::staticSymTable)=
+  [
+    (''x'',[Some 1]),
+    (''z'',[Some 7, None])
+  ]"
 
-(* TODO: impl mergeStatST *)
-fun mergeStatST::"staticSymTable \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable"
-  where
-"mergeStatST s1ST s2ST = s1ST"
+fun removeStatST::"string \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable" where
+  "removeStatST _ [] = []" |
+  "removeStatST e ((var, values)#xs) = (
+    if e = var then removeStatST e xs
+    else (var, values)#(removeStatST e xs)
+  )"
 
+(* Search e in *)
 fun staticAssoc:: "'a \<Rightarrow> ('a * ('b option) list) list \<Rightarrow> ('b option) list"
 where
 "staticAssoc _ [] = []" |
-"staticAssoc x1 ((x,ys)#xs)= (if x=x1 then ys else (staticAssoc x1 xs))"
+"staticAssoc e ((y,ys)#xs)= (if e=y then ys else (staticAssoc e xs))"
+
+fun mergeStatST::"staticSymTable \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable"
+  where
+"mergeStatST [] ys = ys" |
+"mergeStatST ((var, varsX) # xs) ys = (
+  let varsY = staticAssoc var ys in
+    (var, List.append varsX varsY) # mergeStatST xs (removeStatST var ys)
+)"
+
+value "mergeStatST statST1 statST2"
 
 (* Exemples de recherche dans une table de symboles *)
 value "staticAssoc ''x'' statST1"     (* quand la variable est dans la table statST1 *)
@@ -310,12 +390,15 @@ value "staticAssoc ''z'' statST1"     (* quand la variable n'est pas dans la tab
 (*
   Evaluation des expressions
   par rapport a une table de symboles custom.
+
+  \<Rightarrow> (int list) option
 *)
 fun staticEvalE:: "expression \<Rightarrow> staticSymTable \<Rightarrow> int list"
 where
 "staticEvalE (Constant c) _ = [c]" |
-"staticEvalE (Sum e1 e2) e= (mapAddition (staticEvalE e1 e) (staticEvalE e2 e))" |
-"staticEvalE (Sub e1 e2) e= (mapSubtraction (staticEvalE e1 e) (staticEvalE e2 e))" |
+
+"staticEvalE (Sum e1 e2) e= (mapAllAdditionSet (staticEvalE e1 e) (staticEvalE e2 e))" |
+"staticEvalE (Sub e1 e2) e= (mapAllSubtractionSet (staticEvalE e1 e) (staticEvalE e2 e))" |
 (* TODO: staticEvalE (Variable s) e *)
 "staticEvalE (Variable s) e= (
   let ys = (staticAssoc s e) in (

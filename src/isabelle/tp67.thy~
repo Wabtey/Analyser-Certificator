@@ -181,16 +181,10 @@ definition "ok13= (Seq (Aff ''z'' (Constant 4)) (Seq (Aff ''x'' (Constant 1)) (S
 definition "ok14= (Seq (Read ''x'') (Seq (Read ''y'') (If (Eq (Sum (Variable ''x'') (Variable ''y'')) (Constant 0)) (Exec (Constant 1)) (Exec (Sum (Variable ''x'') (Variable ''y''))))))"
 
 
-(* Le TP commence ici! *)
-(* TODO: BAD, san0, lemme de correction *)
+(* v--------------------- Le TP commence ici! ---------------------v *)
 
-(* Si san accepte un programme alors son évaluation, quelles que soient les entrées utilisateur (inchan)
-   ne provoquera pas d'exec(0) *)
-
-(*
-  -- 3.1 --
-   p1, p2, p3 are dangerous (call a exec(0)) p4 is safe.
-*)
+(* -- 3.1 -- *)
+(* p1, p2, p3 are dangerous (call a exec(0)) p4 is safe. *)
 
 (* -- 3.2 -- *)
 (*
@@ -219,6 +213,12 @@ lemma badIsBad: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, out
   done
 
 (* ---------- Static Analyzer ---------- *)
+
+(*
+  Si san accepte un programme alors son évaluation,
+  quelles que soient les entrées utilisateur (inchan)
+  ne provoquera pas d'exec(0).
+*)
 
 (* -- 4.1 --  *)
 fun sanShotgun::"statement \<Rightarrow> bool"
@@ -251,9 +251,83 @@ lemma correctionSanConstant: "sanConstant s \<longrightarrow> \<not>BAD (evalS s
   sorry
 
 (* --- 4.3 --- *)
+
+(* Just differenciate the Read and noneRead path *)
+
+(* TODO *)
+
+
+(* Visualize all possibles outcome: *)
+
+fun howMany::"'a \<Rightarrow> 'a list \<Rightarrow> int"
+  where
+"howMany _ [] = 0" |
+"howMany e (x # xs) = (
+  if e = x then 1 + howMany e xs
+  else howMany e xs
+)"
+
+fun removeDuplicate::"'a list \<Rightarrow> 'a list"
+  where
+"removeDuplicate [] = []" |
+"removeDuplicate (x # xs) = (
+  if List.member xs x then removeDuplicate xs
+  else x # (removeDuplicate xs)
+)"
+
+lemma noMoreDuplicate: "
+  List.member (removeDuplicate xs) x \<and> List.member (removeDuplicate xs) y \<longrightarrow> x \<noteq> y
+"
+  nitpick
+
+(*
+  Create a list of (max) xs lenght times ys length - duplicate.
+  mapAllAddition xs ys \<Rightarrow> create a new list with all addition combinations.
+*)
+fun mapAllAddition::"int list \<Rightarrow> int list \<Rightarrow> int list"
+  where
+"mapAllAddition [] res = removeDuplicate res" |
+"mapAllAddition (x # xs) ys = mapAllAddition xs (map (\<lambda>y::int. x+y)ys)"
+
+value "map (\<lambda> y::nat.1+y)[1,2]" 
+
+value "mapAllAddition [0] [0,1,2,3]"
+value "mapAllAddition [1] [0,1,2,3]"
+value "mapAllAddition [0,1] [0,1,2,3]"
+value "mapAllAddition [10] [0,1,2,3]"
+value "mapAllAddition [1,0,11] [2,1,5]"
+value "mapAllAddition [0,1,2,3] [0,1,2,3]"
+
+(* 
+  mapSubstraction list1 list2 \<Rightarrow>
+    substract each element of list1 from all of list2
+*)
+fun mapSubtraction::"int list \<Rightarrow> int list \<Rightarrow> int list"
+  where
+"mapSubtraction [] res = res" |
+"mapSubtraction (x # xs) ys = mapSubtraction xs (map (\<lambda>y::int. y-x)ys)"
+
+value "map (\<lambda> y::int. y-1)[1,2]"
+
+value "mapSubtraction [0] [0,1,2,3]"
+value "mapSubtraction [1] [0,1,2,3]"
+value "mapSubtraction [0,1] [0,1,2,3]"
+value "mapSubtraction [10] [0,1,2,3]"
+value "mapSubtraction [0,1,2,3] [0,1,2,3]"
+
 type_synonym staticSymTable= "(string * (int option) list) list"
 (* Un exemple de table de symbole *)
-definition "(statST1::staticSymTable)= [(''x'',[Some 5, Some 0]),(''y'',[None, Some 2, Some 17])]"
+definition "(statST1::staticSymTable)=
+  [
+    (''x'',[Some 5, Some 0]),
+    (''y'',[None, Some 2, Some 17])
+  ]"
+
+(* TODO: impl mergeStatST *)
+fun mergeStatST::"staticSymTable \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable"
+  where
+(* replace _ by ((var, possible_value) # s1STs) *)
+"mergeStatST ((x, possiblesValue) # s1STs) s2STs = s2STs"
 
 fun staticAssoc:: "'a \<Rightarrow> ('a * ('b option) list) list \<Rightarrow> ('b option) list"
 where
@@ -261,42 +335,22 @@ where
 "staticAssoc x1 ((x,ys)#xs)= (if x=x1 then ys else (staticAssoc x1 xs))"
 
 (* Exemples de recherche dans une table de symboles *)
-
 value "staticAssoc ''x'' statST1"     (* quand la variable est dans la table statST1 *)
 value "staticAssoc ''z'' statST1"     (* quand la variable n'est pas dans la table statST1 *)
 
 (*
-  placeholder x ys adds x to each ys' element
-  DOC: rename
- *)
-fun placeholder::"int \<Rightarrow> int list \<Rightarrow> int list"
-  where
-"placeholder _ [] = []" |
-"placeholder x (y # ys) = ((x + y) # (placeholder x ys))"
+  Evaluation des expressions
+  par rapport a une table de symboles custom.
 
-value "placeholder 0 [0,1,-1]"
-value "placeholder 1 [0,1,-1]"
-
-(*
-  create a bigger list 
-  DOC: mapAddition
+  \<Rightarrow> (int list) option
 *)
-fun mapAddition::"int list \<Rightarrow> int list \<Rightarrow> int list"
-  where
-"mapAddition [] res = res" |
-"mapAddition (x # xs) ys = mapAddition xs (placeholder x ys)"
-
-(* TODO: mapSubtraction *)
-fun mapSubtraction::"int list \<Rightarrow> int list \<Rightarrow> int list"
-  where
-"mapSubtraction xs ys = mapAddition xs ys"
-
-(* Evaluation des expressions par rapport a une table de symboles *)
 fun staticEvalE:: "expression \<Rightarrow> staticSymTable \<Rightarrow> int list"
 where
 "staticEvalE (Constant c) _ = [c]" |
+
 "staticEvalE (Sum e1 e2) e= (mapAddition (staticEvalE e1 e) (staticEvalE e2 e))" |
 "staticEvalE (Sub e1 e2) e= (mapSubtraction (staticEvalE e1 e) (staticEvalE e2 e))" |
+(* TODO: staticEvalE (Variable s) e *)
 "staticEvalE (Variable s) e= (
   let ys = (staticAssoc s e) in (
     if (List.member ys None) then [-1]
@@ -310,19 +364,32 @@ fun san::"statement \<Rightarrow> staticSymTable \<Rightarrow> (staticSymTable *
   where
 "san (Seq s1 s2) symt = (
   let (s1ST, s1IsOK) = san s1 symt in
-    let (s2ST_, s2IsOK) = san s2 s1ST in
+    let (s2ST, s2IsOK) = san s2 s1ST in
       (s2ST, s1IsOK \<and> s2IsOK)
 )" |
-(* draw all possible staticSymTable for each arm and return the concat of the two *)
-"san (If c s1 s2) symt = (san s1 symt \<and> san s2 symt)" |
-"san (Aff s e) symt =  (s,(evalE e t))#t)" |
-"evalS (Read _) (t,[],outch)= (t,[],outch)" |
-"evalS (Read s) (t,(x#xs),outch)= (((s,x)#t),xs,outch)" |
-"evalS (Print e) (t,inch,outch)= (t,inch,((P (evalE e t))#outch))" |
+(* TODO: draw all possible staticSymTable for each arm and return the concat of the two *)
+"san (If c s1 s2) symt = (
+  let (s1ST, s1IsOK) = san s1 symt in
+    let (s2ST, s2IsOK) = san s2 symt in
+      (s2ST, s1IsOK \<and> s2IsOK)
+)" |
+(* v---------------v *)
+(*
+"san (Aff s e) symt =  (s,(evalE e t)#t)" |
+"san (Read _) (t,[],outch)= (t,[],outch)" |
+"san (Read s) (t,(x#xs),outch)= (((s,x)#t),xs,outch)" |
+"san (Print e) (t,inch,outch)= (t,inch,((P (evalE e t))#outch))" |
+*)
+(* ^---------------^ *)
+(* TODO:
 "san (Exec e) symt = (\<not>(staticEvalE e symt = 0))" |
-"san _ _ = True"
+*)
+"san _ _ = ([],False)"
+(* true end: "san _ _ = (?, True)" *)
 
-lemma correctionSan: "san s \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
+(* TODO: Lemma *)
+lemma correctionSan: "
+  let (sST, isOK) = san s [] in isOK \<longrightarrow> \<not>BAD (evalS s ([],i,[]))"
   nitpick
   quickcheck
   apply auto
@@ -448,7 +515,8 @@ import AutomaticConversion._
 
 (* Directive pour l'exportation de l'analyseur *)
 
-export_code san in Scala (case_insensitive)
+(* TODO: URGENT - change to san to export the finest one *)
+export_code sanConstant in Scala (case_insensitive)
 
 (* file "~/workspace/TP67/src/tp67/san.scala"   (* à adapter en fonction du chemin de votre projet TP67 *)
 *)
