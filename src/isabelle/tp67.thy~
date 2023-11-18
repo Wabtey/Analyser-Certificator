@@ -219,6 +219,8 @@ lemma badIsBad: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, out
   quelles que soient les entrées utilisateur (inchan)
   ne provoquera pas d'exec(0).
 *)
+(* staticEvalE (Variable s) e = "(case (staticAssoc s e) of None \<Rightarrow> -1 | Some(y) \<Rightarrow> y)" *)
+
 
 (* -- 4.1 --  *)
 fun sanShotgun::"statement \<Rightarrow> bool"
@@ -253,6 +255,8 @@ lemma correctionSanConstant: "sanConstant s \<longrightarrow> \<not>BAD (evalS s
 (* --- 4.3 --- *)
 
 (* ----- Just differenciate the Read and noneRead path ----- *)
+
+(* staticEvalE (Variable s) e = "(case (staticAssoc s e) of None \<Rightarrow> -1 | Some(y) \<Rightarrow> y)" *)
 
 (* TODO *)
 
@@ -304,9 +308,9 @@ lemma noMoreDuplicate: "
 fun unwrapOptionList::"('a option) list \<Rightarrow> 'a list" where
   "unwrapOptionList [] = []" |
   "unwrapOptionList (x#xs) = (
-    if x = Some value then 
-      value # (unwrapOptionList xs)
-    else unwrapOptionList xs
+    case x of
+      Some value \<Rightarrow> value # (unwrapOptionList xs) |
+      None \<Rightarrow> unwrapOptionList xs
   )"
 
 (*
@@ -393,9 +397,10 @@ value "staticAssoc ''z'' statST1"     (* quand la variable n'est pas dans la tab
 fun mergeStatST::"staticSymTable \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable"
   where
 "mergeStatST [] ys = ys" |
-"mergeStatST ((var, varsX) # xs) ys = (
-  let varsY = staticAssoc var ys in
-    (var, List.append varsX varsY) # mergeStatST xs (removeStatST var ys)
+"mergeStatST ((var, valuesInX) # xs) ys = (
+  let valuesInY = staticAssoc var ys in
+    (var, removeDuplicate (List.append valuesInX valuesInY))
+    # mergeStatST xs (removeStatST var ys)
 )"
 
 value "mergeStatST statST1 statST2"
@@ -410,13 +415,11 @@ where
 
 "staticEvalE (Sum e1 e2) e= (mapAllAdditionSet (staticEvalE e1 e) (staticEvalE e2 e))" |
 "staticEvalE (Sub e1 e2) e= (mapAllSubtractionSet (staticEvalE e1 e) (staticEvalE e2 e))" |
-(* TODO: staticEvalE (Variable s) e *)
 "staticEvalE (Variable s) e= (
   let ys = (staticAssoc s e) in (
     if (List.member ys None) then []
-    else [0, 0, 0, 0, 0, 0, 0, 0]
+    else unwrapOptionList ys
 ))"
-(* staticEvalE (Variable s) e = "(case (staticAssoc s e) of None \<Rightarrow> -1 | Some(y) \<Rightarrow> y)" *)
 
 fun san::"statement \<Rightarrow> staticSymTable \<Rightarrow> (staticSymTable * bool)"
   where

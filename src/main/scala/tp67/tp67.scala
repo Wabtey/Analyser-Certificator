@@ -100,6 +100,31 @@ object AutomaticConversion {
 
 import AutomaticConversion._
 
+object HOL {
+
+  trait equal[A] {
+    val `HOL.equal`: (A, A) => Boolean
+  }
+  def equal[A](a: A, b: A)(implicit A: equal[A]): Boolean = A.`HOL.equal`(a, b)
+  object equal {
+    implicit def `String.equal_char`: equal[String.char] =
+      new equal[String.char] {
+        val `HOL.equal` = (a: String.char, b: String.char) =>
+          String.equal_chara(a, b)
+      }
+    implicit def `Lista.equal_list`[A: equal]: equal[List[A]] =
+      new equal[List[A]] {
+        val `HOL.equal` = (a: List[A], b: List[A]) => Lista.equal_lista[A](a, b)
+      }
+    implicit def `Int.equal_int`: equal[Int.int] = new equal[Int.int] {
+      val `HOL.equal` = (a: Int.int, b: Int.int) => Int.equal_inta(a, b)
+    }
+  }
+
+  def eq[A: equal](a: A, b: A): Boolean = equal[A](a, b)
+
+} /* object HOL */
+
 object Code_Numeral {
 
   def integer_of_int(x0: Int.int): BigInt = x0 match {
@@ -113,12 +138,35 @@ object Int {
   abstract sealed class int
   final case class int_of_integer(a: BigInt) extends int
 
-  def zero_int: int = int_of_integer(BigInt(0))
-
-  def equal_int(k: int, l: int): Boolean =
+  def equal_inta(k: int, l: int): Boolean =
     Code_Numeral.integer_of_int(k) == Code_Numeral.integer_of_int(l)
 
+  def plus_int(k: int, l: int): int =
+    int_of_integer(
+      Code_Numeral.integer_of_int(k) +
+        Code_Numeral.integer_of_int(l)
+    )
+
+  def zero_int: int = int_of_integer(BigInt(0))
+
+  def minus_int(k: int, l: int): int =
+    int_of_integer(
+      Code_Numeral.integer_of_int(k) -
+        Code_Numeral.integer_of_int(l)
+    )
+
 } /* object Int */
+
+object Product_Type {
+
+  def equal_bool(p: Boolean, pa: Boolean): Boolean = (p, pa) match {
+    case (p, true)  => p
+    case (p, false) => !p
+    case (true, p)  => p
+    case (false, p) => !p
+  }
+
+} /* object Product_Type */
 
 object String {
 
@@ -134,21 +182,303 @@ object String {
       h: Boolean
   ) extends char
 
+  def equal_chara(x0: char, x1: char): Boolean = (x0, x1) match {
+    case (
+          Chara(x1, x2, x3, x4, x5, x6, x7, x8),
+          Chara(y1, y2, y3, y4, y5, y6, y7, y8)
+        ) =>
+      Product_Type.equal_bool(x1, y1) &&
+      (Product_Type.equal_bool(x2, y2) &&
+        (Product_Type.equal_bool(x3, y3) &&
+          (Product_Type.equal_bool(x4, y4) &&
+            (Product_Type.equal_bool(x5, y5) &&
+              (Product_Type.equal_bool(x6, y6) &&
+                (Product_Type.equal_bool(x7, y7) &&
+                  Product_Type.equal_bool(x8, y8)))))))
+  }
+
 } /* object String */
+
+object Lista {
+
+  def equal_lista[A: HOL.equal](x0: List[A], x1: List[A]): Boolean =
+    (x0, x1) match {
+      case (Nil, x21 :: x22) => false
+      case (x21 :: x22, Nil) => false
+      case (x21 :: x22, y21 :: y22) =>
+        HOL.eq[A](x21, y21) && equal_lista[A](x22, y22)
+      case (Nil, Nil) => true
+    }
+
+  def nulla[A](x0: List[A]): Boolean = x0 match {
+    case Nil     => true
+    case x :: xs => false
+  }
+
+  def member[A: HOL.equal](x0: List[A], y: A): Boolean = (x0, y) match {
+    case (Nil, y)     => false
+    case (x :: xs, y) => HOL.eq[A](x, y) || member[A](xs, y)
+  }
+
+  def map[A, B](f: A => B, x1: List[A]): List[B] = (f, x1) match {
+    case (f, Nil)        => Nil
+    case (f, x21 :: x22) => f(x21) :: map[A, B](f, x22)
+  }
+
+} /* object Lista */
 
 object tp67 {
 
-  def sanconstant(x0: statement): Boolean = x0 match {
-    case Seq(s1, s2)       => sanconstant(s1) && sanconstant(s2)
-    case If(uu, s1, s2)    => sanconstant(s1) && sanconstant(s2)
-    case Exec(Constant(c)) => !(Int.equal_int(c, Int.zero_int))
-    case Exec(Variable(v)) => false
-    case Exec(Sum(v, va))  => false
-    case Exec(Sub(v, va))  => false
-    case Aff(v, va)        => true
-    case Read(v)           => true
-    case Print(v)          => true
-    case Skip              => true
+  abstract sealed class option[A]
+  final case class None[A]() extends option[A]
+  final case class Some[A](a: A) extends option[A]
+
+  def removestatst(
+      uu: List[String.char],
+      x1: List[(List[String.char], option[List[Int.int]])]
+  ): List[(List[String.char], option[List[Int.int]])] =
+    (uu, x1) match {
+      case (uu, Nil) => Nil
+      case (e, (vara, values) :: xs) =>
+        (if (Lista.equal_lista[String.char](e, vara)) removestatst(e, xs)
+         else (vara, values) :: removestatst(e, xs))
+    }
+
+  /** Create a list of (max) xs lenght times ys length - duplicate.
+    * mapAllSubtraction xs ys ⇒ create a new list with all possible combinations
+    * of xs - all element of ys.
+    *
+    * @param x0
+    * @param res
+    * @return
+    */
+  def mapallsubtraction(x0: List[Int.int], res: List[Int.int]): List[Int.int] =
+    (x0, res) match {
+      case (Nil, res) => Nil
+      case (x :: xs, ys) =>
+        Lista.map[Int.int, Int.int](
+          ((a: Int.int) => Int.minus_int(x, a)),
+          ys
+        ) ++
+          mapallsubtraction(xs, ys)
+    }
+
+  def removeduplicate[A: HOL.equal](x0: List[A]): List[A] = x0 match {
+    case Nil => Nil
+    case x :: xs =>
+      (if (Lista.member[A](xs, x)) removeduplicate[A](xs)
+       else x :: removeduplicate[A](xs))
   }
+
+  /** Create a list of (max) xs lenght times ys length - duplicate.
+    * mapAllAddition xs ys ⇒ create a new list with all possible combinations by
+    * addition.
+    *
+    * @param x0
+    * @param res
+    * @return
+    */
+  def mapalladdition(x0: List[Int.int], res: List[Int.int]): List[Int.int] =
+    (x0, res) match {
+      case (Nil, res) => Nil
+      case (x :: xs, ys) =>
+        Lista.map[Int.int, Int.int](((a: Int.int) => Int.plus_int(x, a)), ys) ++
+          mapalladdition(xs, ys)
+    }
+
+  def staticassoc[A: HOL.equal, B](
+      uu: A,
+      x1: List[(A, option[List[B]])]
+  ): option[List[B]] =
+    (uu, x1) match {
+      case (uu, Nil) => None[List[B]]()
+      case (e, (vara, potentialValues) :: xs) =>
+        (if (HOL.eq[A](e, vara)) potentialValues else staticassoc[A, B](e, xs))
+    }
+
+  /** Evaluation des expressions par rapport a une table de symboles statique.
+    *
+    * If the result is an empty list, then you can't tell its evaluation (means
+    * that a Read is on the way, without being overwritten). Else it returns the
+    * possible evaluations of the given expression.
+    *
+    * @param x0
+    *   the expression to evaluate
+    * @param uu
+    *   the current static symbols table
+    * @return
+    *   an empty list if you can't tell its evaluation or the possible
+    *   evaluations of the given expression.
+    */
+  def staticevale(
+      x0: expression,
+      uu: List[(List[String.char], option[List[Int.int]])]
+  ): List[Int.int] =
+    (x0, uu) match {
+      case (Constant(c), uu) => List(c)
+      case (Sum(e1, e2), e) =>
+        removeduplicate[Int.int](
+          mapalladdition(staticevale(e1, e), staticevale(e2, e))
+        )
+      case (Sub(e1, e2), e) =>
+        removeduplicate[Int.int](
+          mapallsubtraction(staticevale(e1, e), staticevale(e2, e))
+        )
+      case (Variable(s), e) =>
+        (staticassoc[List[String.char], Int.int](s, e) match {
+          case None()       => Nil
+          case Some(values) => values
+        })
+    }
+
+  /** Merge two staticSymTable together. If a var is present in both, it is
+    * locally merged with the potentialValues of both.
+    *
+    * NOTE: we don't have to remove the var's "ghost footprint" from the rest of
+    * the staticSymTable, as the staticAssoc will always returns the first one
+    * to matches (dc about duplicates).
+    *
+    * @param x0
+    * @param ys
+    * @return
+    */
+  def mergestatst(
+      x0: List[(List[String.char], option[List[Int.int]])],
+      ys: List[(List[String.char], option[List[Int.int]])]
+  ): List[(List[String.char], option[List[Int.int]])] =
+    (x0, ys) match {
+      case (Nil, ys) => ys
+      case ((vara, potentialValuesInX) :: xs, ys) => {
+        val potentialValuesInY: option[List[Int.int]] =
+          staticassoc[List[String.char], Int.int](vara, ys);
+        (
+          vara,
+          ((potentialValuesInX, potentialValuesInY) match {
+            case (None(), _)       => None[List[Int.int]]()
+            case (Some(_), None()) => None[List[Int.int]]()
+            case (Some(valuesInX), Some(valuesInY)) =>
+              Some[List[Int.int]](valuesInX ++ valuesInY)
+          })
+        ) ::
+          mergestatst(xs, removestatst(vara, ys))
+      }
+    }
+
+  /** a `memberStatST` which also returns the actual values (which is an
+    * option).
+    *
+    * @param uu
+    * @param x1
+    * @return
+    */
+  def getstatst(
+      uu: List[String.char],
+      x1: List[(List[String.char], option[List[Int.int]])]
+  ): option[option[List[Int.int]]] =
+    (uu, x1) match {
+      case (uu, Nil) => None[option[List[Int.int]]]()
+      case (e, (vara, values) :: xs) =>
+        (if (Lista.equal_lista[String.char](e, vara))
+           Some[option[List[Int.int]]](values)
+         else getstatst(e, xs))
+    }
+
+  /** This Static Analyzer uses a brand new static symbols table. This
+    * staticSymTable associates for each variable name
+    *   - a `None` if we don't know the value (a Read of that variable could be
+    *     in the lastest trace).
+    *   - a `Some (int list)` to keep track of all possible values of this very
+    *     variable.
+    *
+    * NOTE that we could have manage to simply use a staticSymTable associating
+    * variables' name a `(int list)`, with an empty list meaning the danger of
+    * Read. BUT in order to keep the whole mess legible and to avoid abstracting
+    * the notion of danger, i.e. in the intermediate functions on structures
+    * (`mapAllAdditionSet` and `mapAllSubtractionSet` were ok using [] as the
+    * danger, but a specific `append` should have been created to avoid "losing"
+    * the danger).
+    *
+    * REMEMBER that `Aff` or `Read` a variable just overwrite the previous
+    * potential values.
+    *
+    * @param x0
+    *   the program itself
+    * @param symt
+    *   the current static symbols table (if it is the start, put it just `Nil`)
+    * @return
+    *   The resulting static symbols table AND a boolean of the validity of the
+    *   given program.
+    */
+  def san(
+      x0: statement,
+      symt: List[(List[String.char], option[List[Int.int]])]
+  ): (List[(List[String.char], option[List[Int.int]])], Boolean) =
+    (x0, symt) match {
+      case (Seq(s1, s2), symt) => {
+        val (s1ST, s1IsOK)
+            : (List[(List[String.char], option[List[Int.int]])], Boolean) =
+          san(s1, symt)
+        val (s2ST, s2IsOK)
+            : (List[(List[String.char], option[List[Int.int]])], Boolean) =
+          san(s2, s1ST);
+        (s2ST, s1IsOK && s2IsOK)
+      }
+      // draw all possible staticSymTables for each arm and return the two merged.
+      case (If(c, s1, s2), symt) => {
+        val (s1ST, s1IsOK)
+            : (List[(List[String.char], option[List[Int.int]])], Boolean) =
+          san(s1, symt)
+        val (s2ST, s2IsOK)
+            : (List[(List[String.char], option[List[Int.int]])], Boolean) =
+          san(s2, symt);
+        (mergestatst(s1ST, s2ST), s1IsOK && s2IsOK)
+      }
+      // Put (aka replace) the potential values of var in the staticSymTable.
+      // however you can still code `Aff x (x+1)` as the staticEvalE is done with the current symt.
+      // NOTE: We don't have to remove reallocated var from the symt.
+      //   Simply add it to the top.
+      //   As the staticAssoc returns always the first which matches.
+      //   But we want to have a clean staticSymTable with no duplicate (which is optional / useless)
+      //   to stay classy after such battles (but actually not opti...).
+      case (Aff(vara, exp), symt) =>
+        (staticevale(exp, symt) match {
+          case Nil =>
+            (getstatst(vara, symt) match {
+              case None() => ((vara, None[List[Int.int]]()) :: symt, true)
+              case Some(_) =>
+                (
+                  (vara, None[List[Int.int]]()) :: removestatst(vara, symt),
+                  true
+                )
+            })
+          case a :: list =>
+            (getstatst(vara, symt) match {
+              case None() =>
+                ((vara, Some[List[Int.int]](a :: list)) :: symt, true)
+              case Some(_) =>
+                (
+                  (vara, Some[List[Int.int]](a :: list)) ::
+                    removestatst(vara, symt),
+                  true
+                )
+            })
+        })
+      case (Read(vara), symt) =>
+        (getstatst(vara, symt) match {
+          case None() => ((vara, None[List[Int.int]]()) :: symt, true)
+          case Some(_) =>
+            ((vara, None[List[Int.int]]()) :: removestatst(vara, symt), true)
+        })
+      case (Exec(e), symt) =>
+        (
+          symt, {
+            val values: List[Int.int] = staticevale(e, symt);
+            !(Lista.member[Int.int](values, Int.zero_int)) &&
+            !(Lista.nulla[Int.int](values))
+          }
+        )
+      case (Print(v), symt) => (symt, true)
+      case (Skip, symt)     => (symt, true)
+    }
 
 } /* object tp67 */

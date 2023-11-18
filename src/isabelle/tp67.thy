@@ -219,6 +219,8 @@ lemma badIsBad: "List.member outchan (X 0) \<longrightarrow> BAD (t, inchan, out
   quelles que soient les entrées utilisateur (inchan)
   ne provoquera pas d'exec(0).
 *)
+(* staticEvalE (Variable s) e = "(case (staticAssoc s e) of None \<Rightarrow> -1 | Some(y) \<Rightarrow> y)" *)
+
 
 (* -- 4.1 --  *)
 fun sanShotgun::"statement \<Rightarrow> bool"
@@ -259,6 +261,10 @@ lemma correctionSanConstant: "sanConstant s \<longrightarrow> \<not>BAD (evalS s
 (* TODO *)
 
 (* ----- Visualize all possibles outcome ----- *)
+(*
+  For each variable, keep track of their possible values
+  for all if branches.
+*)
 
 fun remove::"'a \<Rightarrow> 'a list \<Rightarrow> 'a list" where
 "remove _ [] = []" |
@@ -302,6 +308,8 @@ lemma noMoreDuplicate: "
   unwrap all option in the list.
   WARNING: if there is a None it will be not unwraped/be simply ignored.
   Only the none-None will be unwrap.
+
+  currently unused. :)
 *)
 fun unwrapOptionList::"('a option) list \<Rightarrow> 'a list" where
   "unwrapOptionList [] = []" |
@@ -362,17 +370,17 @@ value "mapAllSubtractionSet [0,1,2,3] [0,1,2,3]"
 value "mapAllSubtractionSet [1,0,11] [2,1,5]"
 value "mapAllSubtractionSet [] [2,1,1,5]"
 
-type_synonym staticSymTable= "(string * (int option) list) list"
+type_synonym staticSymTable= "(string * (int list) option) list"
 (* Un exemple de table de symbole *)
 definition "(statST1::staticSymTable)=
   [
-    (''x'',[Some 5, Some 0]),
-    (''y'',[None, Some 2, Some 17])
+    (''x'',Some [5, 0]),
+    (''y'',None)
   ]"
 definition "(statST2::staticSymTable)=
   [
-    (''x'',[Some 1]),
-    (''z'',[Some 7, None])
+    (''x'',Some [1]),
+    (''z'',Some [7])
   ]"
 
 fun removeStatST::"string \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable" where
@@ -382,22 +390,46 @@ fun removeStatST::"string \<Rightarrow> staticSymTable \<Rightarrow> staticSymTa
     else (var, values)#(removeStatST e xs)
   )"
 
-(* Search e in *)
-fun staticAssoc:: "'a \<Rightarrow> ('a * ('b option) list) list \<Rightarrow> ('b option) list"
-where
-"staticAssoc _ [] = []" |
-"staticAssoc e ((y,ys)#xs)= (if e=y then ys else (staticAssoc e xs))"
+(* a memberStatST which also returns the actual values (which is an option). *)
+fun getStatST::"string \<Rightarrow> staticSymTable \<Rightarrow> ((int list) option) option" where
+  "getStatST _ [] = None" |
+  "getStatST e ((var, values)#xs) = (
+    if e = var then Some values
+    else getStatST e xs
+  )"
 
-(* Exemples de recherche dans une table de symboles *)
+(*
+  Search the variable e in the given staticSymStable.
+  staticAssoc varToFind staticSymTable \<Rightarrow> possible values of the varToFind 
+*)
+fun staticAssoc:: "'a \<Rightarrow> ('a * ('b list) option) list \<Rightarrow> ('b list) option"
+where
+"staticAssoc _ [] = None" |
+"staticAssoc e ((var, potentialValues)#xs)= (
+  if e=var then potentialValues else (staticAssoc e xs)
+)"
+
+(* Exemples de recherche dans une table de symboles statique *)
 value "staticAssoc ''x'' statST1"     (* quand la variable est dans la table statST1 *)
 value "staticAssoc ''z'' statST1"     (* quand la variable n'est pas dans la table statST1 *)
 
+(*
+  Merge two staticSymTable together.
+  If a var is present in both, it is locally merged with the potentialValues of both.
+  NOTE: we don't have to remove the var's "ghost footprint" from the rest of the staticSymTable,
+        as the staticAssoc will always returns the first one to matches (dc about duplicates).
+*)
 fun mergeStatST::"staticSymTable \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable"
   where
 "mergeStatST [] ys = ys" |
-"mergeStatST ((var, valuesInX) # xs) ys = (
-  let valuesInY = staticAssoc var ys in
-    (var, removeDuplicate (List.append valuesInX valuesInY))
+"mergeStatST ((var, potentialValuesInX) # xs) ys = (
+  let potentialValuesInY = staticAssoc var ys in
+    (
+      var,
+      case (potentialValuesInX, potentialValuesInY) of
+        (Some valuesInX, Some valuesInY) \<Rightarrow> Some (List.append valuesInX valuesInY) |
+        _ \<Rightarrow> None
+    )
     # mergeStatST xs (removeStatST var ys)
 )"
 
@@ -405,7 +437,11 @@ value "mergeStatST statST1 statST2"
 
 (*
   Evaluation des expressions
-  par rapport a une table de symboles custom.
+  par rapport a une table de symboles statique.
+
+  If the result is an empty list, then you can't tell its evaluation
+  (means that a Read is on the way, without being overwritten).
+  Else it returns the possible evaluations of the given expression.
 *)
 fun staticEvalE:: "expression \<Rightarrow> staticSymTable \<Rightarrow> int list"
 where
@@ -415,10 +451,26 @@ where
 "staticEvalE (Sub e1 e2) e= (mapAllSubtractionSet (staticEvalE e1 e) (staticEvalE e2 e))" |
 "staticEvalE (Variable s) e= (
   let ys = (staticAssoc s e) in (
-    if (List.member ys None) then []
-    else unwrapOptionList ys
+    case ys of
+      None \<Rightarrow> [] |
+      Some values \<Rightarrow> values
 ))"
 
+(*
+  This Static Analyzer uses a brand new static symbols table.
+  This staticSymTable associates
+    for each variable name
+    - a None if we don't know the value (a Read of that variable could be in the lastest trace).
+    - a Some (int list) to keep track of all possible values of this very variable.
+  NOTE that we could have manage to simply use a staticSymTable associating
+  variables' name a (int list), with an empty list meaning the danger of Read.
+  BUT in order to keep the whole mess legible and to avoid abstracting the notion of danger,
+  i.e. in the intermediate functions on structures
+    (mapAllAdditionSet and mapAllSubtractionSet were ok using [] as the danger,
+    but a specific append should have been created to avoid "losing" the danger).
+
+  REMEMBER that Aff or Read a variable just overwrite the previous potential values.
+*)
 fun san::"statement \<Rightarrow> staticSymTable \<Rightarrow> (staticSymTable * bool)"
   where
 "san (Seq s1 s2) symt = (
@@ -426,25 +478,44 @@ fun san::"statement \<Rightarrow> staticSymTable \<Rightarrow> (staticSymTable *
     let (s2ST, s2IsOK) = san s2 s1ST in
       (s2ST, s1IsOK \<and> s2IsOK)
 )" |
-(* TODO: draw all possible staticSymTable for each arm and return the concat of the two *)
+(* draw all possible staticSymTable for each arm and return the two merged. *)
 "san (If c s1 s2) symt = (
   let (s1ST, s1IsOK) = san s1 symt in
     let (s2ST, s2IsOK) = san s2 symt in
       (mergeStatST s1ST s2ST, s1IsOK \<and> s2IsOK)
 )" |
-(* v---------------v *)
-(*
-"san (Aff s e) symt =  (s,(evalE e t)#t)" |
-"san (Read _) (t,[],outch)= (t,[],outch)" |
-"san (Read s) (t,(x#xs),outch)= (((s,x)#t),xs,outch)" |
-"san (Print e) (t,inch,outch)= (t,inch,((P (evalE e t))#outch))" |
-*)
-(* ^---------------^ *)
-(* TODO:
-"san (Exec e) symt = (\<not>(staticEvalE e symt = 0))" |
-*)
-"san _ _ = ([],False)"
-(* true end: "san _ _ = (?, True)" *)
+(* Put (aka replace) the potential values of var in the staticSymTable *)
+(* however you can still code `Aff x (x+1)` as the staticEvalE is done with the current symt *)
+(* NOTE: 
+  We don't have to remove reallocated var from the symt.
+  Simply add it to the top.
+  As the staticAssoc returns always the first which matches.
+  But we want to have a clean staticSymTable with no duplicate (which is optional / useless)
+  to stay classy after such battles. (but actually not opti...) *)
+"san (Aff var exp) symt = (
+  case staticEvalE exp symt of
+    [] \<Rightarrow> (
+      case getStatST var symt of
+        None \<Rightarrow> (((var, None)#symt), True) |
+        Some _ \<Rightarrow> (((var, None)# (removeStatST var symt)), True)
+          )|
+    integerValues \<Rightarrow> (
+      case getStatST var symt of
+        None \<Rightarrow> (((var, Some integerValues)#symt), True) |
+        Some _ \<Rightarrow> (((var, Some integerValues)# (removeStatST var symt)), True)
+                     )
+)" |
+"san (Read var) symt = (
+   case getStatST var symt of
+    None \<Rightarrow> (((var, None)#symt), True) |
+    Some _ \<Rightarrow> (((var, None)# (removeStatST var symt)), True)
+)" |
+"san (Exec e) symt = 
+  (symt, let values = staticEvalE e symt in
+    \<not>List.member values 0 \<and> values \<noteq> [])
+" |
+(* Skip and Print belong here. *)
+"san _ symt = (symt, True)"
 
 (* TODO: Lemma *)
 lemma correctionSan: "
@@ -574,8 +645,7 @@ import AutomaticConversion._
 
 (* Directive pour l'exportation de l'analyseur *)
 
-(* TODO: URGENT - change to san to export the finest one *)
-export_code sanConstant in Scala (case_insensitive)
+export_code san in Scala (case_insensitive)
 
 (* file "~/workspace/TP67/src/tp67/san.scala"   (* à adapter en fonction du chemin de votre projet TP67 *)
 *)
