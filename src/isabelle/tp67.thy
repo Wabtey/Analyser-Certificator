@@ -254,6 +254,8 @@ lemma correctionSanConstant: "sanConstant s \<longrightarrow> \<not>BAD (evalS s
 
 (* ----- Just differenciate the Read and noneRead path ----- *)
 
+(* staticEvalE (Variable s) e = "(case (staticAssoc s e) of None \<Rightarrow> -1 | Some(y) \<Rightarrow> y)" *)
+
 (* TODO *)
 
 (* ----- Visualize all possibles outcome ----- *)
@@ -295,6 +297,19 @@ lemma noMoreDuplicate: "
   apply simp
   apply (simp add: member_rec(2))
   sorry
+
+(*
+  unwrap all option in the list.
+  WARNING: if there is a None it will be not unwraped/be simply ignored.
+  Only the none-None will be unwrap.
+*)
+fun unwrapOptionList::"('a option) list \<Rightarrow> 'a list" where
+  "unwrapOptionList [] = []" |
+  "unwrapOptionList (x#xs) = (
+    case x of
+      Some value \<Rightarrow> value # (unwrapOptionList xs) |
+      None \<Rightarrow> unwrapOptionList xs
+  )"
 
 (*
   Create a list of (max) xs lenght times ys length - duplicate.
@@ -373,25 +388,24 @@ where
 "staticAssoc _ [] = []" |
 "staticAssoc e ((y,ys)#xs)= (if e=y then ys else (staticAssoc e xs))"
 
-fun mergeStatST::"staticSymTable \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable"
-  where
-"mergeStatST [] ys = ys" |
-"mergeStatST ((var, varsX) # xs) ys = (
-  let varsY = staticAssoc var ys in
-    (var, List.append varsX varsY) # mergeStatST xs (removeStatST var ys)
-)"
-
-value "mergeStatST statST1 statST2"
-
 (* Exemples de recherche dans une table de symboles *)
 value "staticAssoc ''x'' statST1"     (* quand la variable est dans la table statST1 *)
 value "staticAssoc ''z'' statST1"     (* quand la variable n'est pas dans la table statST1 *)
 
+fun mergeStatST::"staticSymTable \<Rightarrow> staticSymTable \<Rightarrow> staticSymTable"
+  where
+"mergeStatST [] ys = ys" |
+"mergeStatST ((var, valuesInX) # xs) ys = (
+  let valuesInY = staticAssoc var ys in
+    (var, removeDuplicate (List.append valuesInX valuesInY))
+    # mergeStatST xs (removeStatST var ys)
+)"
+
+value "mergeStatST statST1 statST2"
+
 (*
   Evaluation des expressions
   par rapport a une table de symboles custom.
-
-  \<Rightarrow> (int list) option
 *)
 fun staticEvalE:: "expression \<Rightarrow> staticSymTable \<Rightarrow> int list"
 where
@@ -399,15 +413,11 @@ where
 
 "staticEvalE (Sum e1 e2) e= (mapAllAdditionSet (staticEvalE e1 e) (staticEvalE e2 e))" |
 "staticEvalE (Sub e1 e2) e= (mapAllSubtractionSet (staticEvalE e1 e) (staticEvalE e2 e))" |
-(* TODO: staticEvalE (Variable s) e *)
 "staticEvalE (Variable s) e= (
   let ys = (staticAssoc s e) in (
-    if (List.member ys None) then [-1]
-    else (
-      [0,0]
-    ) 
+    if (List.member ys None) then []
+    else unwrapOptionList ys
 ))"
-(* staticEvalE (Variable s) e = "(case (staticAssoc s e) of None \<Rightarrow> -1 | Some(y) \<Rightarrow> y)" *)
 
 fun san::"statement \<Rightarrow> staticSymTable \<Rightarrow> (staticSymTable * bool)"
   where
@@ -420,7 +430,7 @@ fun san::"statement \<Rightarrow> staticSymTable \<Rightarrow> (staticSymTable *
 "san (If c s1 s2) symt = (
   let (s1ST, s1IsOK) = san s1 symt in
     let (s2ST, s2IsOK) = san s2 symt in
-      (s2ST, s1IsOK \<and> s2IsOK)
+      (mergeStatST s1ST s2ST, s1IsOK \<and> s2IsOK)
 )" |
 (* v---------------v *)
 (*
