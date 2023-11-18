@@ -21,3 +21,15 @@ Overall precision of the analyzer is 2 (min=0 and max=6)
 Your static analyzer accepts the following bad programs: List(bad4.txt)
 That's VERY bad!
 ```
+
+This program that's got us into trouble:
+
+```log
+{
+  read(x)
+  if (x=0) then skip else y:=1
+  exec(y+1)
+}
+```
+
+->> If a variable has an execution path where it is not initialised, it's bad (rework mergeStatST).
